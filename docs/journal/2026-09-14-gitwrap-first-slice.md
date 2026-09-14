@@ -115,3 +115,51 @@ Build order: `gitwrap.py` + `policy.py` (this slice, no cross-dependency between
 config resolution → `SyncBehavior` dispatch (needs both) → one-commit contract (parallelizable
 with config resolution) → markers (parallelizable with everything but needs the dispatch layer
 to know when to write one).
+
+## OPEN QUESTIONS (appended 2026-09-14, full implementation pass)
+
+Every item below is a genuine design gap neither sumac design doc resolves — each was picked
+conservatively to keep moving, implemented, and tested, but is **not confirmed as correct
+design** and should be reviewed before anything depends on the specific choice made. Full
+reasoning for each lives in the per-unit journal entry named.
+
+1. **Unknown `.rc/remotes.toml` type string → hard `ConfigError`, not silent `unsynced`.**
+   (`2026-09-14-05-config.md`) Chosen because a config typo silently downgrading to "sync
+   doesn't happen" seemed worse than a loud failure, for a tool whose entire point is sync
+   correctness. A different call (downgrade + warn, matching the "unknown remote name"
+   leniency) is equally defensible from what's written down.
+
+2. **Preflight's return/signal shape**: `list[PreflightWarning]` return value plus a raised
+   `DivergenceError` for hard blocks. (`2026-09-14-06-syncbehavior-preflight.md`) The design
+   doc describes *what* blocks vs. warns but never a call-and-return shape a caller programs
+   against — this is invented, not derived.
+
+3. **First-ever-sync (no remote-tracking ref yet) is treated as "nothing to check," not a
+   divergence.** (`2026-09-14-06-syncbehavior-preflight.md`) Neither design doc addresses a
+   branch that's never been pushed anywhere.
+
+4. **Backup fetches generically (`fetch_all`, every branch) rather than the narrower "current
+   branch (or whatever refs it holds)" §5 describes for it.** (`2026-09-14-06-...md`) Chosen
+   to keep `SyncBehavior.fetch` a single boolean rather than reintroducing per-type fetch-scope
+   branching; has no observable effect since backup never runs `check_other_branches`, but is
+   a real textual deviation from §5's backup bullet.
+
+5. **`onecommit.run_op` and `api.run` return the new commit hash (`str`) where §6's literal
+   signature is `-> None`.** (`2026-09-14-07-onecommit.md`, `2026-09-14-08-...md`) Kept as a
+   deliberate, useful addition — no consumer of the hash return value exists yet in this
+   package to validate the need against.
+
+6. **Marker `commits` field is recomputed fresh from git state on every write, never read-
+   modify-written from a prior marker.** (`2026-09-14-08-postflight-markers.md`) §7 only shows
+   an example value; doesn't say whether repeated failures should accumulate a count or
+   reflect current truth. Chosen for consistency with §7's own stated preference for avoiding
+   read-modify-write races.
+
+7. **Postflight stops at the first failing remote and never attempts the rest.**
+   (`2026-09-14-08-postflight-markers.md`) §7 describes per-remote push behavior "in order"
+   but not what happens to *other* remotes when one fails mid-loop.
+
+None of these are structural risks to the design (§2's core predicate and the `SyncBehavior`
+table shape are unaffected by any of them), but all seven are implementation-detail decisions
+made without a specific textual anchor, and a future sumac integration should treat all seven
+as still-open rather than settled.

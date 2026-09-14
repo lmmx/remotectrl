@@ -39,8 +39,44 @@ umbrel = "mirror"
 origin = "backup"
 ```
 
+## Usage
+
+```python
+from pathlib import Path
+import subprocess
+import remotectrl
+
+repo = Path("/home/louis/household")
+
+def append_entry():
+    (repo / "journal.md").write_text("bought milk\n", errors="ignore")
+    subprocess.run(["git", "-C", repo, "add", "journal.md"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-m", "entry"], check=True)
+
+try:
+    commit = remotectrl.run(repo, append_entry)
+    print(f"synced as {commit}")
+except remotectrl.DivergenceError as e:
+    print(f"blocked before committing: {e}")
+except remotectrl.PushError as e:
+    print(f"commit is safe locally, but a remote didn't take it: {e}")
+```
+
+`op` (`append_entry` above) is the caller's job — stage and commit however you like, as
+long as it produces exactly one commit. `remotectrl.run` reads `.rc/remotes.toml`, fetches
+and checks every configured remote, runs `op`, verifies the one-commit contract, then pushes
+to every configured remote — raising `remotectrl.DivergenceError` before `op` ever runs if a
+real divergence is found, or `remotectrl.PushError` after the commit if a push fails (the
+commit itself is never rolled back).
+
 ## Install
 
 ```sh
 uv pip install remotectrl
 ```
+
+## Status
+
+Implemented and tested (policy, git subprocess layer, config resolution, preflight,
+one-commit contract, postflight, pending-push markers) — see `docs/journal/` for the design
+history and a few remaining implementation-detail open questions.
