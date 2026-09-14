@@ -1,0 +1,33 @@
+[project]
+name = "remotectrl"
+version = "0.1.0"
+description = "Safe multi-remote git sync for repos with a one-writer-per-branch policy"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Louis Maddox", email = "louismmx@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = []
+keywords = ["git", "sync", "remote", "branch-per-writer"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Version Control :: Git",
+]
+
+[project.urls]
+Repository = "https://github.com/lmmx/remotectrl"
+
+[project.scripts]
+remotectrl = "remotectrl:main"
+
+[build-system]
+requires = ["uv_build>=0.11.13,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
