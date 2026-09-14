@@ -116,50 +116,47 @@ config resolution → `SyncBehavior` dispatch (needs both) → one-commit contra
 with config resolution) → markers (parallelizable with everything but needs the dispatch layer
 to know when to write one).
 
-## OPEN QUESTIONS (appended 2026-09-14, full implementation pass)
+## OPEN QUESTIONS — resolved 2026-09-14 (user review)
 
-Every item below is a genuine design gap neither sumac design doc resolves — each was picked
-conservatively to keep moving, implemented, and tested, but is **not confirmed as correct
-design** and should be reviewed before anything depends on the specific choice made. Full
-reasoning for each lives in the per-unit journal entry named.
+All seven items below were reviewed with the user and are now settled. Six were resolved by
+applying principles already locked in earlier the same day, without new judgment calls; one
+(#7) was a genuine judgment call, resolved with a doc amendment and a code change.
 
-1. **Unknown `.rc/remotes.toml` type string → hard `ConfigError`, not silent `unsynced`.**
-   (`2026-09-14-05-config.md`) Chosen because a config typo silently downgrading to "sync
-   doesn't happen" seemed worse than a loud failure, for a tool whose entire point is sync
-   correctness. A different call (downgrade + warn, matching the "unknown remote name"
-   leniency) is equally defensible from what's written down.
+1. **Unknown `.rc/remotes.toml` type string → hard `ConfigError`. Confirmed as implemented,
+   no change.** Not the same shape as the lenient absent-remote case: an absent remote is a
+   structural, expected scenario (a clone legitimately missing a remote through no one's
+   error); a typo'd type string is a config-authoring mistake that would otherwise silently
+   disable sync protection the user believes is active — exactly the "swallowed failure"
+   pattern §7 already bans for pushes, applied consistently to config.
 
-2. **Preflight's return/signal shape**: `list[PreflightWarning]` return value plus a raised
-   `DivergenceError` for hard blocks. (`2026-09-14-06-syncbehavior-preflight.md`) The design
-   doc describes *what* blocks vs. warns but never a call-and-return shape a caller programs
-   against — this is invented, not derived.
+2. **Preflight's return/signal shape** (`list[PreflightWarning]` + raised `DivergenceError`).
+   **Confirmed as implemented, no change.** This is just §5's soft/hard split given a concrete
+   API shape; nothing new to decide.
 
-3. **First-ever-sync (no remote-tracking ref yet) is treated as "nothing to check," not a
-   divergence.** (`2026-09-14-06-syncbehavior-preflight.md`) Neither design doc addresses a
-   branch that's never been pushed anywhere.
+3. **First-ever-sync treated as "nothing to check."** **Confirmed as implemented, no change.**
+   No tracking ref means nothing to compare against — falls out of `ahead_behind` naturally,
+   not a special case.
 
-4. **Backup fetches generically (`fetch_all`, every branch) rather than the narrower "current
-   branch (or whatever refs it holds)" §5 describes for it.** (`2026-09-14-06-...md`) Chosen
-   to keep `SyncBehavior.fetch` a single boolean rather than reintroducing per-type fetch-scope
-   branching; has no observable effect since backup never runs `check_other_branches`, but is
-   a real textual deviation from §5's backup bullet.
+4. **Backup fetches generically (`fetch_all`).** **Confirmed as implemented, no change.** Same
+   Kolmogorov-minimality principle as the original table design: one fetch path, table-driven,
+   no second implementation to match wording written before the generic-refspec fix existed.
 
-5. **`onecommit.run_op` and `api.run` return the new commit hash (`str`) where §6's literal
-   signature is `-> None`.** (`2026-09-14-07-onecommit.md`, `2026-09-14-08-...md`) Kept as a
-   deliberate, useful addition — no consumer of the hash return value exists yet in this
-   package to validate the need against.
+5. **`run`/`run_op` return the commit hash, not `None`.** **Kept; sumac design doc §6 amended
+   2026-09-14** to `-> str` — the doc was stale (written before any known consumer), not the
+   implementation wrong.
 
-6. **Marker `commits` field is recomputed fresh from git state on every write, never read-
-   modify-written from a prior marker.** (`2026-09-14-08-postflight-markers.md`) §7 only shows
-   an example value; doesn't say whether repeated failures should accumulate a count or
-   reflect current truth. Chosen for consistency with §7's own stated preference for avoiding
-   read-modify-write races.
+6. **Marker `commits` field recomputed fresh, not cumulative.** **Confirmed as implemented, no
+   change.** Matches the same simplicity choice already made for deleting the marker outright
+   on success — cumulative tracking would need its own reset/decay semantics nothing else in
+   the design needs to answer.
 
-7. **Postflight stops at the first failing remote and never attempts the rest.**
-   (`2026-09-14-08-postflight-markers.md`) §7 describes per-remote push behavior "in order"
-   but not what happens to *other* remotes when one fails mid-loop.
-
-None of these are structural risks to the design (§2's core predicate and the `SyncBehavior`
-table shape are unaffected by any of them), but all seven are implementation-detail decisions
-made without a specific textual anchor, and a future sumac integration should treat all seven
-as still-open rather than settled.
+7. **Postflight now attempts every configured remote regardless of earlier failures**,
+   collecting all failures into one `PushError` message, instead of stopping at the first.
+   **Changed** — sumac design doc §7 amended 2026-09-14. Stopping early left every
+   remote after the first failure in an unmarked, ambiguous state (neither pushed nor known
+   unpushed), which is the same silent-gap problem §7 already rules out for a single remote.
+   `src/remotectrl/postflight.py`'s `run_postflight` updated accordingly;
+   `tests/test_postflight.py`'s `test_stops_at_first_failing_remote` replaced with
+   `test_attempts_every_remote_even_after_earlier_failure` and
+   `test_one_remote_failing_does_not_prevent_others_marker_clearing`. Full suite: 66 passed,
+   `ruff check`: clean.

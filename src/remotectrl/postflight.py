@@ -16,13 +16,16 @@ from remotectrl.markers import PendingPush, clear_marker, write_marker
 
 
 class PushError(RuntimeError):
-    """Raised when a push to a configured remote fails. The local commit is left intact."""
+    """Raised when a push to one or more configured remotes fails. The local commit is
+    left intact. If multiple remotes failed, all are named in the message."""
 
 
 def run_postflight(path: Path, remotes: dict[str, RemoteType]) -> None:
-    """Push the current branch to every non-UNSYNCED remote, in order. Stops at the
-    first failure, writing a pending-push marker for it, and raises PushError."""
+    """Push the current branch to every non-UNSYNCED remote, in order. Every remote is
+    attempted regardless of earlier failures; failures write a pending-push marker each
+    and are raised together as a single PushError once all remotes have been tried."""
     branch = current_branch(path)
+    failures: list[str] = []
 
     for remote, remote_type in remotes.items():
         if remote_type == RemoteType.UNSYNCED:
@@ -41,9 +44,13 @@ def run_postflight(path: Path, remotes: dict[str, RemoteType]) -> None:
                     last_attempt_error=str(exc),
                 ),
             )
-            raise PushError(f"{remote}: push failed: {exc}") from exc
+            failures.append(f"{remote}: push failed: {exc}")
+            continue
 
         clear_marker(path, remote)
+
+    if failures:
+        raise PushError("; ".join(failures))
 
 
 def _unpushed_count(path: Path, remote: str, branch: str) -> int:

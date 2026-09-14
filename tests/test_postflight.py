@@ -86,16 +86,27 @@ def test_successful_push_after_prior_failure_clears_marker(
     assert read_marker(git_repo, "origin") is None
 
 
-def test_stops_at_first_failing_remote(
+def test_attempts_every_remote_even_after_earlier_failure(
     git_repo: Path, make_repo: Callable[..., Path], git: Callable, commit: Callable
 ) -> None:
     good = make_repo("good-remote")
     commit(git_repo, "local-only.txt", "x", "distinguishing local commit")
     git(git_repo, "remote", "add", "a", "/nonexistent/does-not-exist")
     git(git_repo, "remote", "add", "b", str(good))
-    with pytest.raises(PushError):
+    with pytest.raises(PushError, match="a:"):
         run_postflight(git_repo, {"a": RemoteType.MIRROR, "b": RemoteType.MIRROR})
     result = git(good, "rev-parse", "main")
-    # "b" never attempted since "a" failed first and the call raised immediately —
-    # "good" must still be at its own seed commit, not the distinguishing commit above.
-    assert result.stdout.strip() != git(git_repo, "rev-parse", "main").stdout.strip()
+    # "b" must still be attempted and succeed even though "a" failed first.
+    assert result.stdout.strip() == git(git_repo, "rev-parse", "main").stdout.strip()
+
+
+def test_one_remote_failing_does_not_prevent_others_marker_clearing(
+    git_repo: Path, make_repo: Callable[..., Path], git: Callable
+) -> None:
+    good = make_repo("good-remote")
+    git(git_repo, "remote", "add", "a", "/nonexistent/does-not-exist")
+    git(git_repo, "remote", "add", "b", str(good))
+    with pytest.raises(PushError):
+        run_postflight(git_repo, {"a": RemoteType.MIRROR, "b": RemoteType.MIRROR})
+    assert read_marker(git_repo, "a") is not None
+    assert read_marker(git_repo, "b") is None
