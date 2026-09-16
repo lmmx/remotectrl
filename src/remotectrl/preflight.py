@@ -59,6 +59,11 @@ def run_preflight(path: Path, remotes: dict[str, RemoteType]) -> list[PreflightW
             if ref_exists(path, own_remote_ref):
                 ahead, behind = ahead_behind(path, branch, own_remote_ref)
                 if not ok(ahead, behind, mine=True):
+                    if ahead > 0:
+                        raise DivergenceError(
+                            f"{remote}: local branch {branch!r} has diverged "
+                            f"({ahead} ahead, {behind} behind) — cannot resolve automatically"
+                        )
                     raise DivergenceError(
                         f"{remote}: local branch {branch!r} is {behind} commit(s) behind"
                     )

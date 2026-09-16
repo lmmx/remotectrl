@@ -58,6 +58,29 @@ def test_mirror_own_branch_ahead_does_not_block(
     assert warnings == []
 
 
+def test_mirror_own_branch_ahead_and_behind_reports_both(
+    git_repo: Path, make_repo: Callable[..., Path], git: Callable, commit: Callable
+) -> None:
+    """A real bug found 2026-09-16: the message previously said only "N commit(s)
+    behind" even when local also had unpushed commits the remote lacked — a real
+    ahead+behind divergence silently read as "just behind, will resolve on its
+    own" when it actually needs manual resolution. See docs/journal
+    2026-09-16-ahead-behind-divergence-message-bug.md."""
+    remote = make_repo("remote")
+    git(remote, "checkout", "-q", "-b", "mine")
+    commit(remote, "extra.txt", "extra", "commit only on remote")
+    git(git_repo, "remote", "add", "origin", str(remote))
+    git(git_repo, "checkout", "-q", "-b", "mine")
+    git(git_repo, "fetch", "origin", "refs/heads/*:refs/remotes/origin/*")
+    commit(git_repo, "oops.txt", "oops", "committed on the wrong branch locally")
+    with pytest.raises(DivergenceError) as exc_info:
+        run_preflight(git_repo, {"origin": RemoteType.MIRROR})
+    message = str(exc_info.value)
+    assert "1 ahead" in message
+    assert "1 behind" in message
+    assert "diverged" in message
+
+
 def test_mirror_other_branch_ahead_blocks(
     git_repo: Path, make_repo: Callable[..., Path], git: Callable, commit: Callable
 ) -> None:
