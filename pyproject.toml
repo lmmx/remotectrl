@@ -1,6 +1,6 @@
 [project]
 name = "remotectrl"
-version = "0.1.0"
+version = "0.1.1"
 description = "Safe multi-remote git sync for repos with a one-writer-per-branch policy"
 readme = "README.md"
 license = "MIT"
