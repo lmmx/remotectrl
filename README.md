@@ -48,10 +48,12 @@ import remotectrl
 
 repo = Path("/home/louis/household")
 
+
 def append_entry():
     (repo / "journal.md").write_text("bought milk\n", errors="ignore")
     subprocess.run(["git", "-C", repo, "add", "journal.md"], check=True)
     subprocess.run(["git", "-C", repo, "commit", "-m", "entry"], check=True)
+
 
 try:
     commit = remotectrl.run(repo, append_entry)
