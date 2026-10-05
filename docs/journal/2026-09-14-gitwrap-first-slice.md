@@ -31,13 +31,20 @@ only place remote-type-specific behavior exists:
 @dataclass(frozen=True)
 class SyncBehavior:
     fetch: bool
-    check_own_branch: bool       # run ok(..., mine=True) on the current branch
-    check_other_branches: bool   # run ok(..., mine=False) on every other local branch
+    check_own_branch: bool  # run ok(..., mine=True) on the current branch
+    check_other_branches: bool  # run ok(..., mine=False) on every other local branch
+
 
 BEHAVIOR: dict[RemoteType, SyncBehavior] = {
-    RemoteType.UNSYNCED: SyncBehavior(fetch=False, check_own_branch=False, check_other_branches=False),
-    RemoteType.BACKUP:   SyncBehavior(fetch=True,  check_own_branch=True,  check_other_branches=False),
-    RemoteType.MIRROR:   SyncBehavior(fetch=True,  check_own_branch=True,  check_other_branches=True),
+    RemoteType.UNSYNCED: SyncBehavior(
+        fetch=False, check_own_branch=False, check_other_branches=False
+    ),
+    RemoteType.BACKUP: SyncBehavior(
+        fetch=True, check_own_branch=True, check_other_branches=False
+    ),
+    RemoteType.MIRROR: SyncBehavior(
+        fetch=True, check_own_branch=True, check_other_branches=True
+    ),
 }
 ```
 
